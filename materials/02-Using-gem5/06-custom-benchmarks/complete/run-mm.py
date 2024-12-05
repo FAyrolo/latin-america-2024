@@ -55,7 +55,7 @@ board = SimpleBoard(
 
 # Set the workload to run a custom matrix multiplication binary.
 board.set_se_binary_workload(
-    binary=BinaryResource(local_path="matrix-multiply")
+    binary=BinaryResource(local_path="matrix-multiply-riscv")
 )
 
 

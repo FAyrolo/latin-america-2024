@@ -1,4 +1,4 @@
-GEM5_PATH = /workspaces/2024/gem5
+GEM5_PATH = /workspaces/latin-america-2024/gem5
 ISA = x86
 GXX = g++
 

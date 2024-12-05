@@ -1,19 +1,19 @@
-#include "bootcamp/inspector-gadget/inspector_gadget.hh"
+#include "bootcamp/secure_memory/secure_memory.hh"
 
 #include <algorithm>
 #include <cmath>
 
-#include "debug/InspectorGadget.hh"
+#include "debug/SecureMemory.hh"
 
 namespace gem5
 {
 
-InspectorGadget::InspectorGadget(const InspectorGadgetParams& params):
+SecureMemory::SecureMemory(const SecureMemoryParams& params):
     ClockedObject(params),
     cpuSidePort(this, name() + ".cpu_side_port"),
     memSidePort(this, name() + ".mem_side_port"),
-    inspectionBufferEntries(params.inspection_buffer_entries),
-    inspectionBuffer(clockPeriod()),
+    BufferEntries(params.buffer_entries),
+    Buffer(clockPeriod()),
     responseBufferEntries(params.response_buffer_entries),
     responseBuffer(clockPeriod()),
     nextReqSendEvent([this](){ processNextReqSendEvent(); }, name() + ".nextReqSendEvent"),
@@ -24,13 +24,13 @@ InspectorGadget::InspectorGadget(const InspectorGadgetParams& params):
 {}
 
 void
-InspectorGadget::init()
+SecureMemory::init()
 {
     cpuSidePort.sendRangeChange();
 }
 
 Port&
-InspectorGadget::getPort(const std::string &if_name, PortID idx)
+SecureMemory::getPort(const std::string &if_name, PortID idx)
 {
     if (if_name == "cpu_side_port") {
         return cpuSidePort;
@@ -42,27 +42,27 @@ InspectorGadget::getPort(const std::string &if_name, PortID idx)
 }
 
 Tick
-InspectorGadget::align(Tick when)
+SecureMemory::align(Tick when)
 {
     return clockEdge((Cycles) std::ceil((when - curTick()) / clockPeriod()));
 }
 
 AddrRangeList
-InspectorGadget::CPUSidePort::getAddrRanges() const
+SecureMemory::CPUSidePort::getAddrRanges() const
 {
     return owner->getAddrRanges();
 }
 
 AddrRangeList
-InspectorGadget::getAddrRanges() const
+SecureMemory::getAddrRanges() const
 {
     return memSidePort.getAddrRanges();
 }
 
 bool
-InspectorGadget::CPUSidePort::recvTimingReq(PacketPtr pkt)
+SecureMemory::CPUSidePort::recvTimingReq(PacketPtr pkt)
 {
-    DPRINTF(InspectorGadget, "%s: Received pkt: %s in timing mode.\n", __func__, pkt->print());
+    DPRINTF(SecureMemory, "%s: Received pkt: %s in timing mode.\n", __func__, pkt->print());
     if (owner->recvTimingReq(pkt)) {
         return true;
     }
@@ -71,62 +71,62 @@ InspectorGadget::CPUSidePort::recvTimingReq(PacketPtr pkt)
 }
 
 bool
-InspectorGadget::recvTimingReq(PacketPtr pkt)
+SecureMemory::recvTimingReq(PacketPtr pkt)
 {
-    if (inspectionBuffer.size() >= inspectionBufferEntries) {
+    if (Buffer.size() >= BufferEntries) {
         return false;
     }
-    inspectionBuffer.push(pkt, curTick());
+    Buffer.push(pkt, curTick());
     scheduleNextReqSendEvent(nextCycle());
     return true;
 }
 
 Tick
-InspectorGadget::CPUSidePort::recvAtomic(PacketPtr pkt)
+SecureMemory::CPUSidePort::recvAtomic(PacketPtr pkt)
 {
-    DPRINTF(InspectorGadget, "%s: Received pkt: %s in atomic mode.\n", __func__, pkt->print());
+    DPRINTF(SecureMemory, "%s: Received pkt: %s in atomic mode.\n", __func__, pkt->print());
     return owner->recvAtomic(pkt);
 }
 
 Tick
-InspectorGadget::recvAtomic(PacketPtr pkt)
+SecureMemory::recvAtomic(PacketPtr pkt)
 {
     return clockPeriod() + memSidePort.sendAtomic(pkt);
 }
 
 void
-InspectorGadget::CPUSidePort::recvFunctional(PacketPtr pkt)
+SecureMemory::CPUSidePort::recvFunctional(PacketPtr pkt)
 {
-    DPRINTF(InspectorGadget, "%s: Received pkt: %s in functional mode.\n", __func__, pkt->print());
+    DPRINTF(SecureMemory, "%s: Received pkt: %s in functional mode.\n", __func__, pkt->print());
     owner->recvFunctional(pkt);
 }
 
 void
-InspectorGadget::recvFunctional(PacketPtr pkt)
+SecureMemory::recvFunctional(PacketPtr pkt)
 {
     memSidePort.sendFunctional(pkt);
 }
 
 // Too-Much-Code
 void
-InspectorGadget::CPUSidePort::sendPacket(PacketPtr pkt)
+SecureMemory::CPUSidePort::sendPacket(PacketPtr pkt)
 {
     panic_if(blocked(), "Should never try to send if blocked!");
 
-    DPRINTF(InspectorGadget, "%s: Sending pkt: %s.\n", __func__, pkt->print());
+    DPRINTF(SecureMemory, "%s: Sending pkt: %s.\n", __func__, pkt->print());
     if (!sendTimingResp(pkt)) {
-        DPRINTF(InspectorGadget, "%s: Failed to send pkt: %s.\n", __func__, pkt->print());
+        DPRINTF(SecureMemory, "%s: Failed to send pkt: %s.\n", __func__, pkt->print());
         blockedPacket = pkt;
     }
 }
 
 // Too-Much-Code
 void
-InspectorGadget::CPUSidePort::recvRespRetry()
+SecureMemory::CPUSidePort::recvRespRetry()
 {
     panic_if(!blocked(), "Should never receive retry if not blocked!");
 
-    DPRINTF(InspectorGadget, "%s: Received retry signal.\n", __func__);
+    DPRINTF(SecureMemory, "%s: Received retry signal.\n", __func__);
     PacketPtr pkt = blockedPacket;
     blockedPacket = nullptr;
     sendPacket(pkt);
@@ -138,28 +138,28 @@ InspectorGadget::CPUSidePort::recvRespRetry()
 
 // Too-Much-Code
 void
-InspectorGadget::recvRespRetry()
+SecureMemory::recvRespRetry()
 {
     scheduleNextRespSendEvent(nextCycle());
 }
 
 void
-InspectorGadget::MemSidePort::sendPacket(PacketPtr pkt)
+SecureMemory::MemSidePort::sendPacket(PacketPtr pkt)
 {
     panic_if(blocked(), "Should never try to send if blocked!");
 
-    DPRINTF(InspectorGadget, "%s: Sending pkt: %s.\n", __func__, pkt->print());
+    DPRINTF(SecureMemory, "%s: Sending pkt: %s.\n", __func__, pkt->print());
     if (!sendTimingReq(pkt)) {
-        DPRINTF(InspectorGadget, "%s: Failed to send pkt: %s.\n", __func__, pkt->print());
+        DPRINTF(SecureMemory, "%s: Failed to send pkt: %s.\n", __func__, pkt->print());
         blockedPacket = pkt;
     }
 }
 
 // Too-Much-Code
 bool
-InspectorGadget::MemSidePort::recvTimingResp(PacketPtr pkt)
+SecureMemory::MemSidePort::recvTimingResp(PacketPtr pkt)
 {
-    DPRINTF(InspectorGadget, "%s: Received pkt: %s in timing mode.\n", __func__, pkt->print());
+    DPRINTF(SecureMemory, "%s: Received pkt: %s in timing mode.\n", __func__, pkt->print());
     if (owner->recvTimingResp(pkt)) {
         return true;
     }
@@ -169,7 +169,7 @@ InspectorGadget::MemSidePort::recvTimingResp(PacketPtr pkt)
 
 // Too-Much-Code
 bool
-InspectorGadget::recvTimingResp(PacketPtr pkt)
+SecureMemory::recvTimingResp(PacketPtr pkt)
 {
     if (responseBuffer.size() >= responseBufferEntries) {
         return false;
@@ -180,11 +180,11 @@ InspectorGadget::recvTimingResp(PacketPtr pkt)
 }
 
 void
-InspectorGadget::MemSidePort::recvReqRetry()
+SecureMemory::MemSidePort::recvReqRetry()
 {
     panic_if(!blocked(), "Should never receive retry if not blocked!");
 
-    DPRINTF(InspectorGadget, "%s: Received retry signal.\n", __func__);
+    DPRINTF(SecureMemory, "%s: Received retry signal.\n", __func__);
     PacketPtr pkt = blockedPacket;
     blockedPacket = nullptr;
     sendPacket(pkt);
@@ -195,49 +195,49 @@ InspectorGadget::MemSidePort::recvReqRetry()
 }
 
 void
-InspectorGadget::recvReqRetry()
+SecureMemory::recvReqRetry()
 {
     scheduleNextReqSendEvent(nextCycle());
 }
 
 void
-InspectorGadget::processNextReqSendEvent()
+SecureMemory::processNextReqSendEvent()
 {
     panic_if(memSidePort.blocked(), "Should never try to send if blocked!");
-    panic_if(!inspectionBuffer.hasReady(curTick()), "Should never try to send if no ready packets!");
+    panic_if(!Buffer.hasReady(curTick()), "Should never try to send if no ready packets!");
 
     stats.numRequestsFwded++;
-    stats.totalInspectionBufferLatency += curTick() - inspectionBuffer.frontTime();
+    stats.totalBufferLatency += curTick() - Buffer.frontTime();
 
-    PacketPtr pkt = inspectionBuffer.front();
+    PacketPtr pkt = Buffer.front();
     memSidePort.sendPacket(pkt);
-    inspectionBuffer.pop();
+    Buffer.pop();
 
     scheduleNextReqRetryEvent(nextCycle());
     scheduleNextReqSendEvent(nextCycle());
 }
 
 void
-InspectorGadget::scheduleNextReqSendEvent(Tick when)
+SecureMemory::scheduleNextReqSendEvent(Tick when)
 {
     bool port_avail = !memSidePort.blocked();
-    bool have_items = !inspectionBuffer.empty();
+    bool have_items = !Buffer.empty();
 
     if (port_avail && have_items && !nextReqSendEvent.scheduled()) {
-        Tick schedule_time = align(std::max(when, inspectionBuffer.firstReadyTime()));
+        Tick schedule_time = align(std::max(when, Buffer.firstReadyTime()));
         schedule(nextReqSendEvent, schedule_time);
     }
 }
 
 void
-InspectorGadget::processNextReqRetryEvent()
+SecureMemory::processNextReqRetryEvent()
 {
     panic_if(!cpuSidePort.needRetry(), "Should never try to send retry if not needed!");
     cpuSidePort.sendRetryReq();
 }
 
 void
-InspectorGadget::scheduleNextReqRetryEvent(Tick when)
+SecureMemory::scheduleNextReqRetryEvent(Tick when)
 {
     if (cpuSidePort.needRetry() && !nextReqRetryEvent.scheduled()) {
         schedule(nextReqRetryEvent, align(when));
@@ -246,7 +246,7 @@ InspectorGadget::scheduleNextReqRetryEvent(Tick when)
 
 // Too-Much-Code
 void
-InspectorGadget::processNextRespSendEvent()
+SecureMemory::processNextRespSendEvent()
 {
     panic_if(cpuSidePort.blocked(), "Should never try to send if blocked!");
     panic_if(!responseBuffer.hasReady(curTick()), "Should never try to send if no ready packets!");
@@ -264,7 +264,7 @@ InspectorGadget::processNextRespSendEvent()
 
 // Too-Much-Code
 void
-InspectorGadget::scheduleNextRespSendEvent(Tick when)
+SecureMemory::scheduleNextRespSendEvent(Tick when)
 {
     bool port_avail = !cpuSidePort.blocked();
     bool have_items = !responseBuffer.empty();
@@ -277,7 +277,7 @@ InspectorGadget::scheduleNextRespSendEvent(Tick when)
 
 // Too-Much-Code
 void
-InspectorGadget::processNextRespRetryEvent()
+SecureMemory::processNextRespRetryEvent()
 {
     panic_if(!memSidePort.needRetry(), "Should never try to send retry if not needed!");
     memSidePort.sendRetryResp();
@@ -285,16 +285,16 @@ InspectorGadget::processNextRespRetryEvent()
 
 // Too-Much-Code
 void
-InspectorGadget::scheduleNextRespRetryEvent(Tick when)
+SecureMemory::scheduleNextRespRetryEvent(Tick when)
 {
     if (memSidePort.needRetry() && !nextRespRetryEvent.scheduled()) {
         schedule(nextRespRetryEvent, align(when));
     }
 }
 
-InspectorGadget::InspectorGadgetStats::InspectorGadgetStats(InspectorGadget* inspector_gadget):
-    statistics::Group(inspector_gadget),
-    ADD_STAT(totalInspectionBufferLatency, statistics::units::Tick::get(), "Total inspection buffer latency."),
+SecureMemory::SecureMemoryStats::SecureMemoryStats(SecureMemory* secure_memory):
+    statistics::Group(secure_memory),
+    ADD_STAT(totalBufferLatency, statistics::units::Tick::get(), "Total CPU side buffer latency."),
     ADD_STAT(numRequestsFwded, statistics::units::Count::get(), "Number of requests forwarded."),
     ADD_STAT(totalResponseBufferLatency, statistics::units::Tick::get(), "Total response buffer latency."),
     ADD_STAT(numResponsesFwded, statistics::units::Count::get(), "Number of responses forwarded.")

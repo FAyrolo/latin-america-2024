@@ -1,8 +1,3 @@
-"""
-This module contains a three-level cache hierarchy with private L1 caches,
-private L2 caches, and a shared L3 cache.
-"""
-
 from gem5.components.boards.abstract_board import AbstractBoard
 from gem5.components.cachehierarchies.classic.abstract_classic_cache_hierarchy import (
     AbstractClassicCacheHierarchy,
@@ -52,12 +47,28 @@ class PrivateL1PrivateL2SharedL3CacheHierarchy(AbstractClassicCacheHierarchy):
         self._l3_assoc = l3_assoc
 
         ## FILL THIS IN
+        self.membus = SystemXBar(width=64)
+        ##
 
         # For FS mode
         self.membus.badaddr_responder = BadAddr()
         self.membus.default = self.membus.badaddr_responder.pio
 
     ## FILL THIS IN
+    def get_mem_side_port(self):
+        return self.membus.side_ports()
+
+    def get_cpu_side_port(self):
+        return self.membus.cpu_side_ports
+
+    def incorporate_cache(self, board):
+        board.connect_system_port(self.membus.cpu_side_ports)
+
+        for _, port in board.get_memory().get_mem_ports():
+            self.membus.mem_side_ports = port
+
+        self.l3_bus = L2XBar()
+    ##
 
     def _create_core_cluster(self, core, l3_bus, isa):
         """
