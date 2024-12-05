@@ -15,6 +15,7 @@ typings/
 
 # .vscode stuff
 .vscode/*.log
+.vscode/settings.json
 
 __pycache__
 
