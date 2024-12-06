@@ -9,8 +9,8 @@ import gem5.utils.multisim as multisim
 #Components from the course
 from my_processor import BigProcessor, LittleProcessor
 from three_level import PrivateL1PrivateL2SharedL3CacheHierarchy
+from gem5.components.memory.multi_channel import ChanneledMemory #needed for ddr5 next
 from gem5.components.memory.dram_interfaces.lpddr5 import LPDDR5_6400_1x16_BG_BL32
-
 
 #Parse command line arguments
 parser = argparse.ArgumentParser()
@@ -70,7 +70,9 @@ board = SimpleBoard(
         memory=memory,
         cache_hierarchy=cache_hierarchy,
     )
-workload = obtain_resource("riscv-getting-started-benchmark-suite")
+
+#workload = obtain_resource("riscv-getting-started-benchmark-suite")
+workload = list(obtain_resource("riscv-getting-started-benchmark-suite"))[-1]
 board.set_workload(workload)
 simulator = Simulator(board=board)
 simulator.run()
